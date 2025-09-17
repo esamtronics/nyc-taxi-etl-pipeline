@@ -1,0 +1,212 @@
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+      - ./data:/data
+    environment:
+      - CLUSTER_NAME=test
+    healthcheck:
+      test: ["CMD", "hdfs", "dfsadmin", "-report"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hadoop-spark-postgres
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    healthcheck:
+      test: ["CMD", "hdfs", "dfsadmin", "-report"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hadoop-spark-postgres
+
+  datanode2:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode2
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode2:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    healthcheck:
+      test: ["CMD", "hdfs", "dfsadmin", "-report"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hadoop-spark-postgres
+
+  datanode3:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode3
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode3:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    healthcheck:
+      test: ["CMD", "hdfs", "dfsadmin", "-report"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hadoop-spark-postgres
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    depends_on:
+      - namenode
+      - datanode
+      - datanode2
+      - datanode3
+    ports:
+      - "8088:8088"
+    networks:
+      - hadoop-spark-postgres
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager
+    depends_on:
+      - resourcemanager
+    environment:
+      SERVICE_PRECONDITION: "resourcemanager:8088"
+    networks:
+      - hadoop-spark-postgres
+
+  spark-master:
+    image: bde2020/spark-master:3.3.0-hadoop3.3
+    container_name: spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./spark-jobs:/spark-jobs
+      - ./jars:/opt/spark/jars
+      - ./data:/data
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATE=false
+      - PATH=/spark/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - SPARK_CLASSPATH=/opt/spark/jars/postgresql-42.6.0.jar
+    networks:
+      - hadoop-spark-postgres
+
+  spark-worker:
+    image: bde2020/spark-worker:3.3.0-hadoop3.3
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./jars:/opt/spark/jars
+      - ./data:/data
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATE=false
+      - SPARK_CLASSPATH=/opt/spark/jars/postgresql-42.6.0.jar
+    networks:
+      - hadoop-spark-postgres
+
+  spark-worker-2:
+    image: bde2020/spark-worker:3.3.0-hadoop3.3
+    container_name: spark-worker-2
+    depends_on:
+      - spark-master
+    ports:
+      - "8082:8081"
+    volumes:
+      - ./jars:/opt/spark/jars
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATE=false
+      - SPARK_CLASSPATH=/opt/spark/jars/postgresql-42.6.0.jar
+    networks:
+      - hadoop-spark-postgres
+
+  spark-worker-3:
+    image: bde2020/spark-worker:3.3.0-hadoop3.3
+    container_name: spark-worker-3
+    depends_on:
+      - spark-master
+    ports:
+      - "8083:8081"
+    volumes:
+      - ./jars:/opt/spark/jars
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATE=false
+      - SPARK_CLASSPATH=/opt/spark/jars/postgresql-42.6.0.jar
+    networks:
+      - hadoop-spark-postgres
+
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+    - POSTGRES_USER=spark
+    - POSTGRES_PASSWORD=spark
+    - POSTGRES_DB=spark
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - hadoop-spark-postgres
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - ./pgadmin-config/servers.json:/pgadmin4/servers.json
+    networks:
+      - hadoop-spark-postgres
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+  hadoop_datanode2:
+  hadoop_datanode3:
+  postgres_data:
+
+networks:
+  hadoop-spark-postgres:
+    driver: bridge
